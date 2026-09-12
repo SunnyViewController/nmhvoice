@@ -2436,6 +2436,10 @@ src="https://www.facebook.com/tr?id=1785776022143224&ev=PageView&noscript=1"
 
 	<style>
 		/* chatbot.css - 간소화된 버전 */
+		.dl-trigger .icon::before {
+			content: "\e900"; /* 또는 다른 유니코드 */
+			font-family: 'icomoon' /* 또는 다른 아이콘 폰트명 */;
+		}
 
 		#schoolChatbotWidget {
 			position: fixed;
@@ -2443,6 +2447,7 @@ src="https://www.facebook.com/tr?id=1785776022143224&ev=PageView&noscript=1"
 			right: 30px;
 			z-index: 9999;
 			font-family: "Lucida Grande", "Lucida Sans Unicode", "Geneva", "Segoe UI", -apple-system, sans-serif;
+			overflow: visible !important;
 		}
 
 		#chatbotToggleBtn {
@@ -2467,18 +2472,18 @@ src="https://www.facebook.com/tr?id=1785776022143224&ev=PageView&noscript=1"
 				box-shadow: 0 15px 40px rgba(102, 126, 234, 0.6);
 			}
 
-			#chatbotToggleBtn::before {
-				content: '';
-				position: absolute;
-				top: 10px;
-				left: 10px;
-				right: 10px;
-				bottom: 10px;
-				background-image: url('AI_assistant.png');
-				background-repeat: no-repeat;
-				background-position: center;
-				background-size: contain;
-			}
+            #chatbotToggleBtn::before {
+                content: '';
+                position: absolute;
+                top: 10px;
+                left: 10px;
+                right: 10px;
+                bottom: 10px;
+                background-image: url('AI_assistant.png');
+                background-repeat: no-repeat;
+                background-position: center;
+                background-size: contain;
+            }
 
 		#chatbotWindow {
 			position: absolute;
@@ -2487,7 +2492,7 @@ src="https://www.facebook.com/tr?id=1785776022143224&ev=PageView&noscript=1"
 			width: 500px;
 			height: 550px;
 			background: white;
-			border-radius: 24px;
+			border-radius: 24px; /* ✅ 둥근 모서리 유지 */
 			box-shadow: 0 20px 60px rgba(0,0,0,0.15);
 			display: none;
 			flex-direction: column;
@@ -2510,6 +2515,7 @@ src="https://www.facebook.com/tr?id=1785776022143224&ev=PageView&noscript=1"
 			flex-direction: column;
 			height: 100%;
 			min-height: 0; /* 중요 */
+			overflow-x: visible !important;
 		}
 
 		#chatbotCloseBtn {
@@ -2861,6 +2867,89 @@ src="https://www.facebook.com/tr?id=1785776022143224&ev=PageView&noscript=1"
 			animation: fadeIn 0.3s ease-out;
 		}
 
+		/* 이미지/비디오 슬라이드 패널 */
+		.media-slide-panel {
+			position: fixed;
+			top: auto;
+			right: auto;
+			width: 370px;
+			max-height: 550px;
+			background: white;
+			border-radius: 16px;
+			box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+			z-index: 10000;
+			display: none; /* ✅ 하나만 남기고 */
+			border: 1px solid #e5e7eb;
+			flex-direction: column;
+			overflow: hidden;
+		}
+
+			.media-slide-panel.active {
+				right: 0;
+			}
+
+			.media-slide-panel .panel-close-btn {
+				background: none;
+				border: none;
+				font-size: 20px;
+				cursor: pointer;
+				color: #666;
+			}
+
+			.media-slide-panel img {
+				width: 100%;
+				border-radius: 12px;
+				margin-bottom: 12px;
+			}
+
+			.media-slide-panel video {
+				width: 100%;
+				border-radius: 12px;
+				margin-bottom: 12px;
+			}
+
+		.panel-header-fixed {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 16px;
+			border-bottom: 1px solid #eee;
+			background: white;
+			flex-shrink: 0; /* ✅ 고정 */
+			border-radius: 16px 16px 0 0;
+		}
+
+		.panel-content-scroll {
+			flex: 1;
+			overflow-y: auto;
+			padding: 16px;
+			min-height: 0; /* ✅ 이거 추가! */
+		}
+
+		.media-preview-btn {
+			background: #f0f4ff !important;
+			border: 1px solid #4361ee !important;
+			color: #4361ee !important;
+			padding: 6px 12px !important;
+			border-radius: 8px !important;
+			cursor: pointer !important;
+			font-size: 13px !important;
+			margin-top: 4px !important;
+			display: inline-block !important;
+			visibility: visible !important;
+			opacity: 1 !important;
+		}
+
+			.media-preview-btn:hover {
+				background: #4361ee !important;
+				color: white !important;
+			}
+
+		/* 패널이 열릴 때 챗봇 너비 조정 */
+		#chatbotWindow.has-panel .chatbot-messages {
+			padding-right: 10px;
+		}
+
 		/* 스크롤바 */
 		#chatbotMessages::-webkit-scrollbar {
 			width: 6px;
@@ -2879,6 +2968,147 @@ src="https://www.facebook.com/tr?id=1785776022143224&ev=PageView&noscript=1"
 			#chatbotMessages::-webkit-scrollbar-thumb:hover {
 				background: #a8a8a8;
 			}
+
+
+
+        .voice-connecting-ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            z-index: 10000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            border-radius: 16px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .voice-connecting-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            color: white;
+        }
+
+        .voice-avatar {
+            position: relative;
+            width: 120px;
+            height: 120px;
+        }
+
+            .voice-avatar img {
+                width: 100%;
+                height: 100%;
+                border-radius: 50%;
+                object-fit: cover;
+                border: 3px solid rgba(255, 255, 255, 0.3);
+            }
+
+        .voice-pulse {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 255, 255, 0.5);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            100% {
+                transform: scale(1.5);
+                opacity: 0;
+            }
+        }
+
+        .voice-status-text {
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+
+        .voice-waves {
+            display: flex;
+            gap: 4px;
+            height: 30px;
+            align-items: center;
+        }
+
+            .voice-waves span {
+                width: 4px;
+                height: 10px;
+                background: white;
+                border-radius: 2px;
+                animation: wave 1.2s infinite ease-in-out;
+            }
+
+                .voice-waves span:nth-child(2) {
+                    animation-delay: 0.1s;
+                    height: 20px;
+                }
+
+                .voice-waves span:nth-child(3) {
+                    animation-delay: 0.2s;
+                    height: 15px;
+                }
+
+        @keyframes wave {
+            0%, 100% {
+                transform: scaleY(1);
+            }
+
+            50% {
+                transform: scaleY(2);
+            }
+        }
+
+        .voice-cancel-btn {
+            padding: 10px 30px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid white;
+            color: white;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+            .voice-cancel-btn:hover {
+                background: white;
+                color: #667eea;
+            }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* 연결 완료 시 상태 변경 */
+        .voice-connecting-ui.connected .voice-status-text {
+            /* 변경 가능 */
+        }
+
+        .voice-connecting-ui.connected .voice-waves {
+            display: none;
+        }
+
+
 
 		/* 반응형 */
 		/* 반응형 - 모바일 (600px 이하) */
@@ -2925,6 +3155,7 @@ src="https://www.facebook.com/tr?id=1785776022143224&ev=PageView&noscript=1"
 				overflow-y: auto;
 				-webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
 				padding: 16px;
+				overflow-x: visible !important;
 			}
 
 			/* 4. 메시지 스타일 */
@@ -3036,11 +3267,21 @@ src="https://www.facebook.com/tr?id=1785776022143224&ev=PageView&noscript=1"
 				#chatbotSendBtn:active {
 					transform: scale(0.95);
 				}
+
+			.media-slide-panel {
+				border-radius: 20px;
+				box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+			}
+
+			.panel-header-fixed {
+				border-radius: 20px 20px 0 0;
+			}
 		}
 
 
 		/* 최종 CSS 완성 */
 	</style>
+
 	<div id="schoolChatbotWidget">
 		<button id="chatbotToggleBtn">🤖</button>
 
@@ -3054,29 +3295,49 @@ src="https://www.facebook.com/tr?id=1785776022143224&ev=PageView&noscript=1"
 
 					<h3 style="margin: 0; font-size: 1.1rem; color: white;">NMH AI assistant</h3>
 				</div>
-				<button id="chatbotCloseBtn" style="
-            background: none;
-            border: none;
-            color: white;
-            font-size: 1.5rem;
-            cursor: pointer;
-            padding: 0;
-            width: 30px;
-            height: 30px;
-        ">
-					×
-				</button>
+				<div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
+					<button id="chatbotCloseBtn" style="background: rgba(255, 255, 255, 0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;">
+						×
+					</button>
+				</div>
+
 			</div>
 
 			<div class="chatbot-body" id="chatbotBody">
-
-
 				<div id="chatbotMessages"></div>
+
+				<!-- 🆕 미디어 슬라이드 패널 -->
+				<div id="mediaSlidePanel" class="media-slide-panel">
+					<div class="panel-header-fixed">
+						<span id="panelTitle" style="font-weight: 600; font-size: 15px;">📷 Media Preview</span>
+						<button class="panel-close-btn" onclick="closeMediaPanel()">✕</button>
+					</div>
+					<div id="mediaPanelContent" class="panel-content-scroll"></div>
+				</div>
+
+				<div id="voiceConnectingUI" class="voice-connecting-ui">
+					<div class="voice-connecting-content">
+						<div class="voice-avatar">
+							<img src="AI_assistant.png" alt="AI">
+							<div class="voice-pulse"></div>
+						</div>
+						<div class="voice-status-text">Connecting...</div>
+						<div class="voice-waves">
+							<span></span><span></span><span></span>
+						</div>
+						<button class="voice-cancel-btn" onclick="cancelVoice()">Cancel</button>
+					</div>
+				</div>
+
 			</div>
 
 			<div class="chatbot-footer">
 				<div class="chatbot-input">
 					<input type="text" id="chatbotInput" placeholder="Type a message...">
+					<button id="voiceInputBtn" title="Voice input"
+							style="background:none;border:none;cursor:pointer;font-size:20px;padding:8px;">
+						🎤
+					</button>
 					<button id="chatbotSendBtn">Send</button>
 				</div>
 			</div>
