@@ -60,22 +60,69 @@ document.addEventListener('DOMContentLoaded', function () {
 					try {
 						const data = JSON.parse(new TextDecoder().decode(payload));
 						if (data.type === 'media' && data.items) {
-							const mediaItems = data.items.map(item => {
-								if (item.type === 'map') return { type: 'map', address: item.address };
-								return { type: item.type, url: item.url, title: item.title || 'Media' };
+							// ✅ items와 itemDataList를 함께 생성 (텍스트 챗봇과 동일한 구조)
+							const items = [];
+							const itemDataList = [];
+							let dataIndex = 0;
+
+							data.items.forEach((item) => {
+								if (item.type === 'map') {
+									items.push({ type: 'map', address: item.address });
+									return;
+								}
+
+								// ✅ URL 기반 타입 재감지
+								let actualType = item.type;
+								const url = item.url || '';
+
+								if (url.includes('vimeo.com') || url.includes('youtube.com') || url.includes('youtu.be') ||
+									/\.(mp4|mov|webm|avi)$/i.test(url)) {
+									actualType = 'video';
+								} else if (/\.(pdf|doc|docx|xlsx|ppt|pptx)$/i.test(url)) {
+									actualType = 'file';
+								}
+
+								// ✅ items에 dataIndex 부여
+								items.push({
+									type: actualType,
+									url: item.url,
+									title: item.title || 'Media',
+									dataIndex: dataIndex,
+								});
+
+								// ✅ itemDataList에 title + description 저장
+								itemDataList.push({
+									title: item.title || '',
+									description: item.description || '',
+									rating: item.rating || '',
+									extra: item.extra || '',
+								});
+
+								dataIndex++;
 							});
-							const mapItems = mediaItems.filter(i => i.type === 'map');
-							const otherItems = mediaItems.filter(i => i.type !== 'map');
-							if (mapItems.length > 0) {
-								const mapText = mapItems.map(m => `[MAP: ${m.address}]`).join('\n');
-								openMediaPanel(otherItems, mapText, []);
-							} else {
-								openMediaPanel(otherItems, '', []);
-							}
-						} else if (data.type === 'text') {
-							addMessage(data.text, 'bot');
+
+							const mapItems = items.filter(i => i.type === 'map');
+							const otherItems = items.filter(i => i.type !== 'map');
+
+							// ✅ mapText 생성 (기존 로직 유지)
+							const mapText = mapItems.length > 0
+								? mapItems.map(m => `[MAP: ${m.address}]`).join('\n')
+								: '';
+
+							// ✅ openMediaPanel에 itemDataList 전달!
+							openMediaPanel(otherItems, mapText, itemDataList);
+
+							// ✅ "View Media" 버튼도 함께 추가 (선택)
+							const reopenBtn = document.createElement('button');
+							reopenBtn.className = 'media-preview-btn';
+							reopenBtn.textContent = '📷 View Media';
+							reopenBtn.style.cssText = 'background:#f0f4ff;border:1px solid #4361ee;color:#4361ee;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;margin-top:4px;';
+							reopenBtn.onclick = () => openMediaPanel(otherItems, mapText, itemDataList);
+							// 필요하면 chatbotMessages에 추가 (하지만 보이스 챗봇은 채팅 버블이 없으니 생략 가능)
 						}
-					} catch (e) { /* 무시 */ }
+					} catch (e) {
+						console.error('Data parse error:', e);
+					}
 				});
 
 				room.on(RoomEvent.Disconnected, () => {
