@@ -405,27 +405,16 @@ document.addEventListener('DOMContentLoaded', function () {
 				wrapper.appendChild(img);
 			} else if (item.type === 'video') {
 				if (item.url.includes('vimeo.com') || item.url.includes('youtube.com') || item.url.includes('youtu.be')) {
-					let cleanUrl = item.url.replace(/[?&]autoplay=1/gi, '');
-					cleanUrl = cleanUrl.replace(/[?&]$/, '');
-
-					let embedUrl = cleanUrl;
-					if (cleanUrl.includes('youtube.com/watch?v=')) {
-						const videoId = new URL(cleanUrl).searchParams.get('v');
-						embedUrl = `https://www.youtube.com/embed/${videoId}`;
-					} else if (cleanUrl.includes('youtu.be/')) {
-						const videoId = cleanUrl.split('youtu.be/')[1]?.split('?')[0];
-						embedUrl = `https://www.youtube.com/embed/${videoId}`;
-					} else if (cleanUrl.includes('vimeo.com')) {
-						embedUrl = cleanUrl;
+					let embedUrl = item.url;
+					if (item.url.includes('youtube.com/watch?v=')) {
+						embedUrl = `https://www.youtube.com/embed/${new URL(item.url).searchParams.get('v')}`;
+					} else if (item.url.includes('youtu.be/')) {
+						embedUrl = `https://www.youtube.com/embed/${item.url.split('youtu.be/')[1]?.split('?')[0]}`;
 					}
 					const iframe = document.createElement('iframe');
-					iframe.src = embedUrl;
-					iframe.width = '100%';
-					iframe.height = '200';
+					iframe.src = embedUrl; iframe.width = '100%'; iframe.height = '200';
 					iframe.style.cssText = 'border:0;border-radius:12px;';
-					iframe.allowFullscreen = true;
-					iframe.loading = 'lazy';
-					iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+					iframe.allowFullscreen = true; iframe.loading = 'lazy';
 					wrapper.appendChild(iframe);
 				} else {
 					const video = document.createElement('video');
