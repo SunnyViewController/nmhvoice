@@ -332,15 +332,38 @@ document.addEventListener('DOMContentLoaded', function () {
 
 	function extractFileUrls(text) {
 		const urls = [];
+
+		// 1. PDF 마크다운 링크
 		const mdRegex = /\[(.*?)\]\((https?:\/\/[^\s)]*\.pdf[^\s)]*)\)/gi;
 		let match;
-		while ((match = mdRegex.exec(text)) !== null) urls.push({ url: match[2], title: match[1] });
+		while ((match = mdRegex.exec(text)) !== null) {
+			urls.push({ url: match[2], title: match[1] });
+		}
+
+		// ✅ 2. 📎 이모지로 시작하는 모든 외부 링크 인식
+		const emojiFileRegex = /\[📎\s*(.*?)\]\((https?:\/\/[^\s)]+)\)/gi;
+		while ((match = emojiFileRegex.exec(text)) !== null) {
+			if (!urls.find(u => u.url === match[2])) {
+				urls.push({ url: match[2], title: match[1] });
+			}
+		}
+
+		// 3. Google Docs / Sheets / Slides
+		const googleDocsRegex = /\[(.*?)\]\((https?:\/\/docs\.google\.com\/[^\s)]+)\)/gi;
+		while ((match = googleDocsRegex.exec(text)) !== null) {
+			if (!urls.find(u => u.url === match[2])) {
+				urls.push({ url: match[2], title: match[1] });
+			}
+		}
+
+		// 4. 일반 PDF URL (마크다운 없는 경우)
 		const urlRegex = /(https?:\/\/[^\s]+\.pdf[^\s)]*)/gi;
 		while ((match = urlRegex.exec(text)) !== null) {
 			if (!urls.find(u => u.url === match[0])) {
 				urls.push({ url: match[0], title: match[0].split('/').pop().split('?')[0] });
 			}
 		}
+
 		return urls;
 	}
 
@@ -500,6 +523,7 @@ document.addEventListener('DOMContentLoaded', function () {
 		formatted = formatted.replace(/\[(.*?)\]\((.*?\.(mp4|mov|webm|avi))\)/gi, '🎬 <em>$1</em>');
 		formatted = formatted.replace(/\[(.*?)\]\((https?:\/\/player\.vimeo\.com\/[^)]+)\)/gi, '🎬 <em>$1</em>');
 		formatted = formatted.replace(/\[(.*?)\]\((https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)[^)]+)\)/gi, '🎬 <em>$1</em>');
+		formatted = formatted.replace(/\[📎\s*(.*?)\]\((https?:\/\/[^\s)]+)\)/gi, '📎 <em>$1</em>');
 		formatted = formatted.replace(/\[(.*?)\]\((.*?\.(pdf|doc|docx|xlsx|ppt|pptx))\)/gi, '📎 <em>$1</em>');
 		formatted = formatted.replace(/\[ITEM_DATA:\s*(.*?)\]/g, '');
 		formatted = formatted.replace(/\[MAP:\s*(.*?)\]/g, '');
