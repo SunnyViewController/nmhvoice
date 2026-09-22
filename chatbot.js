@@ -22,6 +22,9 @@ document.addEventListener('DOMContentLoaded', function () {
 	let isVoiceActive = false;
 	let micStream = null;
 
+	let lastMediaSignature = '';
+	let lastMediaTime = 0;
+
 	// ================================================
 	// LiveKit Voice
 	// ================================================
@@ -29,7 +32,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	voiceBtn?.addEventListener('click', async () => {
 		if (!isVoiceActive) {
 			try {
-				showConnectingUI();  
+				showConnectingUI();
 
 				const schoolId = "g43iWISB87NdD9Hmbe95BchTJVs1";
 				const VOICE = "Aoede";
@@ -58,6 +61,19 @@ document.addEventListener('DOMContentLoaded', function () {
 					try {
 						const data = JSON.parse(new TextDecoder().decode(payload));
 						if (data.type === 'media' && data.items) {
+							const signature = JSON.stringify(
+								data.items.map(i => i.url || i.address).sort()
+							);
+							const now = Date.now();
+
+							if (signature === lastMediaSignature && (now - lastMediaTime) < 2000) {
+								console.log('⚠️ Duplicate media payload ignored');
+								return;
+							}
+
+							lastMediaSignature = signature;
+							lastMediaTime = now;
+
 							const items = [];
 							const itemDataList = [];
 							let dataIndex = 0;
@@ -74,7 +90,8 @@ document.addEventListener('DOMContentLoaded', function () {
 								if (url.includes('vimeo.com') || url.includes('youtube.com') || url.includes('youtu.be') ||
 									/\.(mp4|mov|webm|avi)$/i.test(url)) {
 									actualType = 'video';
-								} else if (/\.(pdf|doc|docx|xlsx|ppt|pptx)$/i.test(url)) {
+								} else if (/\.(pdf|doc|docx|xlsx|ppt|pptx)$/i.test(url) ||
+									url.includes('docs.google.com')) {
 									actualType = 'file';
 								}
 
@@ -104,11 +121,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 							openMediaPanel(otherItems, mapText, itemDataList);
 
-							const reopenBtn = document.createElement('button');
-							reopenBtn.className = 'media-preview-btn';
-							reopenBtn.textContent = '📷 View Media';
-							reopenBtn.style.cssText = 'background:#f0f4ff;border:1px solid #4361ee;color:#4361ee;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;margin-top:4px;';
-							reopenBtn.onclick = () => openMediaPanel(otherItems, mapText, itemDataList);
+							console.log(`✅ Media panel opened with ${otherItems.length} items`);
 						}
 					} catch (e) {
 						console.error('Data parse error:', e);
@@ -156,7 +169,6 @@ document.addEventListener('DOMContentLoaded', function () {
 			ui.style.display = 'flex';
 			const statusText = ui.querySelector('.voice-status-text');
 			if (statusText) statusText.textContent = 'Connecting...';
-
 			ui.classList.add('connecting');
 		}
 	}
@@ -172,7 +184,6 @@ document.addEventListener('DOMContentLoaded', function () {
 	function cancelVoice() {
 		const ui = document.getElementById('voiceConnectingUI');
 		if (ui) ui.style.display = 'none';
-
 		const voiceBtn = document.getElementById('voiceInputBtn');
 		if (voiceBtn) voiceBtn.click();
 	}
@@ -336,7 +347,12 @@ document.addEventListener('DOMContentLoaded', function () {
 		const urlRegex = /(https?:\/\/[^\s]+\.pdf[^\s)]*)/gi;
 		while ((match = urlRegex.exec(text)) !== null) {
 			if (!urls.find(u => u.url === match[0])) {
-				urls.push({ url: match[0], title: match[0].split('/').pop().split('?')[0] });
+				let fileName = match[0].split('/').pop().split('?')[0];
+				try {
+					fileName = decodeURIComponent(fileName);
+				} catch (e) {
+				}
+				urls.push({ url: match[0], title: fileName });
 			}
 		}
 
