@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', function () {
 				// ✅ getMediaDevices 제거 - LiveKit이 자동으로 요청
 				showConnectingUI();  // 연결 UI 표시
 
-				const schoolId = "2ZQLb1N7bafnESAPXauOIL2y0m03";
+				const schoolId = "g43iWISB87NdD9Hmbe95BchTJVs1";
 				const VOICE = "Aoede";
 				const response = await fetch(`https://livekit-token-319080578768.us-central1.run.app?school_id=${schoolId}&voice=${VOICE}`);
 				if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -628,7 +628,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 		const requestData = {
 			message: message,
-			school_id: "2ZQLb1N7bafnESAPXauOIL2y0m03",
+			school_id: "g43iWISB87NdD9Hmbe95BchTJVs1",
 			user_id: "anonymous",
 			history: conversationMemory.slice(-10)
 		};
