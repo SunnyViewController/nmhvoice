@@ -1,5 +1,6 @@
-// chatbot.js - 텍스트 챗봇 + LiveKit 음성 AI
+// chatbot.js
 
+// DOM이 로드된 후 실행
 document.addEventListener('DOMContentLoaded', function () {
 	const toggleBtn = document.getElementById('chatbotToggleBtn');
 	const closeBtn = document.getElementById('chatbotCloseBtn');
@@ -11,7 +12,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 	let conversationMemory = [];
 
-	const aiAvatarUrl = 'AI_assistant.png';
+	const aiAvatarUrl = 'mascot.png';
 	const userAvatarUrl = 'https://cdn-icons-png.flaticon.com/512/847/847969.png';
 
 	// ================================================
@@ -32,9 +33,9 @@ document.addEventListener('DOMContentLoaded', function () {
 				// ✅ getMediaDevices 제거 - LiveKit이 자동으로 요청
 				showConnectingUI();  // 연결 UI 표시
 
-				const schoolId = "g43iWISB87NdD9Hmbe95BchTJVs1";
-				const VOICE = "Aoede";
-				const response = await fetch(`https://livekit-token-319080578768.us-central1.run.app?school_id=${schoolId}&voice=${VOICE}`);
+				const schoolId = "GRTalivrcZfW2MkFZmGDEDGnbjD2";
+				const VOICE = "Puck";
+				const response = await fetch(`https://livekit-token-319080578768.us-central1.run.app?school_id=${schoolId}`);
 				if (!response.ok) throw new Error(`HTTP ${response.status}`);
 				const { token, url } = await response.json();
 
@@ -332,38 +333,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
 	function extractFileUrls(text) {
 		const urls = [];
-
-		// 1. PDF 마크다운 링크
 		const mdRegex = /\[(.*?)\]\((https?:\/\/[^\s)]*\.pdf[^\s)]*)\)/gi;
 		let match;
-		while ((match = mdRegex.exec(text)) !== null) {
-			urls.push({ url: match[2], title: match[1] });
-		}
-
-		// ✅ 2. 📎 이모지로 시작하는 모든 외부 링크 인식
-		const emojiFileRegex = /\[📎\s*(.*?)\]\((https?:\/\/[^\s)]+)\)/gi;
-		while ((match = emojiFileRegex.exec(text)) !== null) {
-			if (!urls.find(u => u.url === match[2])) {
-				urls.push({ url: match[2], title: match[1] });
-			}
-		}
-
-		// 3. Google Docs / Sheets / Slides
-		const googleDocsRegex = /\[(.*?)\]\((https?:\/\/docs\.google\.com\/[^\s)]+)\)/gi;
-		while ((match = googleDocsRegex.exec(text)) !== null) {
-			if (!urls.find(u => u.url === match[2])) {
-				urls.push({ url: match[2], title: match[1] });
-			}
-		}
-
-		// 4. 일반 PDF URL (마크다운 없는 경우)
+		while ((match = mdRegex.exec(text)) !== null) urls.push({ url: match[2], title: match[1] });
 		const urlRegex = /(https?:\/\/[^\s]+\.pdf[^\s)]*)/gi;
 		while ((match = urlRegex.exec(text)) !== null) {
 			if (!urls.find(u => u.url === match[0])) {
 				urls.push({ url: match[0], title: match[0].split('/').pop().split('?')[0] });
 			}
 		}
-
 		return urls;
 	}
 
@@ -523,7 +501,6 @@ document.addEventListener('DOMContentLoaded', function () {
 		formatted = formatted.replace(/\[(.*?)\]\((.*?\.(mp4|mov|webm|avi))\)/gi, '🎬 <em>$1</em>');
 		formatted = formatted.replace(/\[(.*?)\]\((https?:\/\/player\.vimeo\.com\/[^)]+)\)/gi, '🎬 <em>$1</em>');
 		formatted = formatted.replace(/\[(.*?)\]\((https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)[^)]+)\)/gi, '🎬 <em>$1</em>');
-		formatted = formatted.replace(/\[📎\s*(.*?)\]\((https?:\/\/[^\s)]+)\)/gi, '📎 <em>$1</em>');
 		formatted = formatted.replace(/\[(.*?)\]\((.*?\.(pdf|doc|docx|xlsx|ppt|pptx))\)/gi, '📎 <em>$1</em>');
 		formatted = formatted.replace(/\[ITEM_DATA:\s*(.*?)\]/g, '');
 		formatted = formatted.replace(/\[MAP:\s*(.*?)\]/g, '');
@@ -652,7 +629,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 		const requestData = {
 			message: message,
-			school_id: "g43iWISB87NdD9Hmbe95BchTJVs1",
+			school_id: "GRTalivrcZfW2MkFZmGDEDGnbjD2",
 			user_id: "anonymous",
 			history: conversationMemory.slice(-10)
 		};
@@ -743,7 +720,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	// ================================================
 
 	function showWelcomeMessage() {
-		addMessage("Welcome to **Northfield Mount Hermon**. I'm your **NMH AI assistant**. What can I help you with today?", 'bot');
+		addMessage("Welcome to **Campbell Hall**. I'm your **Campbell Hall AI assistant**. What can I help you with today?", 'bot');
 		showQuickQuestions();
 	}
 
@@ -752,11 +729,11 @@ document.addEventListener('DOMContentLoaded', function () {
 		qq.className = 'quick-questions';
 		qq.innerHTML = `
 			<div class="quick-questions-title">Quick questions:</div>
-			<button class="quick-btn" data-question="Can you tell me how I can get to Northfield Mount Hermon?">🚗 How to get here</button>
+			<button class="quick-btn" data-question="Can you tell me how I can get to Campbell Hall?">🚗 How to get here</button>
 			<button class="quick-btn" data-question="What is the application process? What documents do I need to complete and submit, and what is the deadline?">📝 Application Process</button>
 			<button class="quick-btn" data-question="What are the key school events taking place this month?">📅 School Events</button>
-			<button class="quick-btn" data-question="What facilities does Northfield Mount Hermon have?">🏫 School Facilities</button>
-			<button class="quick-btn" data-question="How much does it cost to attend Northfield Mount Hermon School? What is the tuition?">🏫 Tuition</button>`;
+			<button class="quick-btn" data-question="What facilities does Campbell Hall have?">🏫 School Facilities</button>
+			<button class="quick-btn" data-question="How much does it cost to attend Campbell Hall School? What is the tuition?">🏫 Tuition</button>`;
 		chatbotMessages.appendChild(qq);
 		qq.querySelectorAll('.quick-btn').forEach(btn => {
 			btn.addEventListener('click', function () {
