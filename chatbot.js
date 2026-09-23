@@ -127,6 +127,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 				room.on(RoomEvent.Disconnected, () => {
 					console.log('🔌 LiveKit disconnected');
+					room = null;
 					stopVoice();
 				});
 
@@ -199,15 +200,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
 	function stopVoice() {
 		if (room) {
-			room.disconnect();
-			room = null;
+			const r = room;
+			room = null;  
+			r.disconnect();
 		}
 		if (micStream) {
 			micStream.getTracks().forEach(t => t.stop());
 			micStream = null;
 		}
 		isVoiceActive = false;
-		voiceBtn.textContent = '🎤';
+		if (voiceBtn) voiceBtn.textContent = '🎤';
 	}
 
 	// ================================================
@@ -240,7 +242,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	});
 
 	window.addEventListener('beforeunload', () => {
-		speechSynthesis.cancel();
+		if (window.speechSynthesis) window.speechSynthesis.cancel();
 		stopVoice();
 	});
 
