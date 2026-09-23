@@ -1,4 +1,4 @@
-// chatbot.js - Text + LiveKit voice AI
+// chatbot.js - 텍스트 챗봇 + LiveKit 음성 AI
 
 document.addEventListener('DOMContentLoaded', function () {
 	const toggleBtn = document.getElementById('chatbotToggleBtn');
@@ -21,24 +21,16 @@ document.addEventListener('DOMContentLoaded', function () {
 	let room = null;
 	let isVoiceActive = false;
 	let micStream = null;
-	let aiAudioElement = null;
-
-	let lastMediaSignature = '';
-	let lastMediaTime = 0;
 
 	// ================================================
-	// LiveKit Voice
+	// LiveKit 음성 시작/종료
 	// ================================================
 
 	voiceBtn?.addEventListener('click', async () => {
 		if (!isVoiceActive) {
 			try {
-				if (room) {
-					room.disconnect();
-					room = null;
-				}
-
-				showConnectingUI();
+				// ✅ getMediaDevices 제거 - LiveKit이 자동으로 요청
+				showConnectingUI();  // 연결 UI 표시
 
 				const schoolId = "g43iWISB87NdD9Hmbe95BchTJVs1";
 				const VOICE = "Aoede";
@@ -54,27 +46,13 @@ document.addEventListener('DOMContentLoaded', function () {
 					dynacast: true,
 				});
 
+				// ✅ 이벤트 리스너들
 				room.on(RoomEvent.TrackSubscribed, (track) => {
 					if (track.kind === Track.Kind.Audio) {
 						console.log('🔊 AI audio track received');
-
-						if (aiAudioElement) {
-							aiAudioElement.pause();
-							aiAudioElement.srcObject = null;
-							aiAudioElement.remove();
-							aiAudioElement = null;
-						}
-
-						aiAudioElement = track.attach();
-						aiAudioElement.style.display = 'none';
-						document.body.appendChild(aiAudioElement);
-						aiAudioElement.play().catch(err => console.log('Play error:', err));
-					}
-				});
-
-				room.on(RoomEvent.TrackUnsubscribed, (track) => {
-					if (track.kind === Track.Kind.Audio) {
-						track.detach().forEach(el => el.remove());
+						const audioElement = track.attach();
+						document.body.appendChild(audioElement);
+						audioElement.play().catch(err => console.log('Play error:', err));
 					}
 				});
 
@@ -82,19 +60,7 @@ document.addEventListener('DOMContentLoaded', function () {
 					try {
 						const data = JSON.parse(new TextDecoder().decode(payload));
 						if (data.type === 'media' && data.items) {
-							const signature = JSON.stringify(
-								data.items.map(i => i.url || i.address).sort()
-							);
-							const now = Date.now();
-
-							if (signature === lastMediaSignature && (now - lastMediaTime) < 2000) {
-								console.log('⚠️ Duplicate media payload ignored');
-								return;
-							}
-
-							lastMediaSignature = signature;
-							lastMediaTime = now;
-
+							// ✅ items와 itemDataList를 함께 생성 (텍스트 챗봇과 동일한 구조)
 							const items = [];
 							const itemDataList = [];
 							let dataIndex = 0;
@@ -105,17 +71,18 @@ document.addEventListener('DOMContentLoaded', function () {
 									return;
 								}
 
+								// ✅ URL 기반 타입 재감지
 								let actualType = item.type;
 								const url = item.url || '';
 
 								if (url.includes('vimeo.com') || url.includes('youtube.com') || url.includes('youtu.be') ||
 									/\.(mp4|mov|webm|avi)$/i.test(url)) {
 									actualType = 'video';
-								} else if (/\.(pdf|doc|docx|xlsx|ppt|pptx)$/i.test(url) ||
-									url.includes('docs.google.com')) {
+								} else if (/\.(pdf|doc|docx|xlsx|ppt|pptx)$/i.test(url)) {
 									actualType = 'file';
 								}
 
+								// ✅ items에 dataIndex 부여
 								items.push({
 									type: actualType,
 									url: item.url,
@@ -123,6 +90,7 @@ document.addEventListener('DOMContentLoaded', function () {
 									dataIndex: dataIndex,
 								});
 
+								// ✅ itemDataList에 title + description 저장
 								itemDataList.push({
 									title: item.title || '',
 									description: item.description || '',
@@ -136,13 +104,21 @@ document.addEventListener('DOMContentLoaded', function () {
 							const mapItems = items.filter(i => i.type === 'map');
 							const otherItems = items.filter(i => i.type !== 'map');
 
+							// ✅ mapText 생성 (기존 로직 유지)
 							const mapText = mapItems.length > 0
 								? mapItems.map(m => `[MAP: ${m.address}]`).join('\n')
 								: '';
 
+							// ✅ openMediaPanel에 itemDataList 전달!
 							openMediaPanel(otherItems, mapText, itemDataList);
 
-							console.log(`✅ Media panel opened with ${otherItems.length} items`);
+							// ✅ "View Media" 버튼도 함께 추가 (선택)
+							const reopenBtn = document.createElement('button');
+							reopenBtn.className = 'media-preview-btn';
+							reopenBtn.textContent = '📷 View Media';
+							reopenBtn.style.cssText = 'background:#f0f4ff;border:1px solid #4361ee;color:#4361ee;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;margin-top:4px;';
+							reopenBtn.onclick = () => openMediaPanel(otherItems, mapText, itemDataList);
+							// 필요하면 chatbotMessages에 추가 (하지만 보이스 챗봇은 채팅 버블이 없으니 생략 가능)
 						}
 					} catch (e) {
 						console.error('Data parse error:', e);
@@ -154,9 +130,11 @@ document.addEventListener('DOMContentLoaded', function () {
 					stopVoice();
 				});
 
+				// ✅ 연결
 				await room.connect(url, token);
 				console.log('✅ LiveKit connected');
 
+				// ✅ 연결 완료 표시
 				const ui = document.getElementById('voiceConnectingUI');
 				if (ui) {
 					const statusText = ui.querySelector('.voice-status-text');
@@ -164,9 +142,11 @@ document.addEventListener('DOMContentLoaded', function () {
 					ui.classList.add('connected');
 				}
 
+				// ✅ 마이크 활성화 (한 번만 팝업)
 				await room.localParticipant.setMicrophoneEnabled(true);
 				console.log('🎤 Microphone enabled');
 
+				// ✅ 짧게 "Connected" 보여주고 숨기기
 				setTimeout(() => {
 					hideConnectingUI();
 				}, 800);
@@ -184,16 +164,21 @@ document.addEventListener('DOMContentLoaded', function () {
 		}
 	});
 
+	// 연결 UI 표시
 	function showConnectingUI() {
 		const ui = document.getElementById('voiceConnectingUI');
 		if (ui) {
 			ui.style.display = 'flex';
+			// 상태 텍스트 변경
 			const statusText = ui.querySelector('.voice-status-text');
 			if (statusText) statusText.textContent = 'Connecting...';
+
+			// 애니메이션 클래스 추가
 			ui.classList.add('connecting');
 		}
 	}
 
+	// 연결 완료 UI 숨기기
 	function hideConnectingUI() {
 		const ui = document.getElementById('voiceConnectingUI');
 		if (ui) {
@@ -202,9 +187,12 @@ document.addEventListener('DOMContentLoaded', function () {
 		}
 	}
 
+	// 전역 함수
 	function cancelVoice() {
 		const ui = document.getElementById('voiceConnectingUI');
 		if (ui) ui.style.display = 'none';
+
+		// voiceBtn 클릭과 동일하게 중지
 		const voiceBtn = document.getElementById('voiceInputBtn');
 		if (voiceBtn) voiceBtn.click();
 	}
@@ -218,18 +206,12 @@ document.addEventListener('DOMContentLoaded', function () {
 			micStream.getTracks().forEach(t => t.stop());
 			micStream = null;
 		}
-		if (aiAudioElement) {
-			aiAudioElement.pause();
-			aiAudioElement.srcObject = null;
-			aiAudioElement.remove();
-			aiAudioElement = null;
-		}
 		isVoiceActive = false;
 		voiceBtn.textContent = '🎤';
 	}
 
 	// ================================================
-	// Text chatbot
+	// 기존 텍스트 챗봇 코드 (유지)
 	// ================================================
 
 	if (window.innerWidth <= 600) {
@@ -295,7 +277,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	});
 
 	// ================================================
-	// Utility
+	// 유틸리티 (기존 코드 유지)
 	// ================================================
 
 	function getCurrentTime() {
@@ -350,39 +332,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
 	function extractFileUrls(text) {
 		const urls = [];
-
 		const mdRegex = /\[(.*?)\]\((https?:\/\/[^\s)]*\.pdf[^\s)]*)\)/gi;
 		let match;
-		while ((match = mdRegex.exec(text)) !== null) {
-			urls.push({ url: match[2], title: match[1] });
-		}
-
-		const emojiFileRegex = /\[📎\s*(.*?)\]\((https?:\/\/[^\s)]+)\)/gi;
-		while ((match = emojiFileRegex.exec(text)) !== null) {
-			if (!urls.find(u => u.url === match[2])) {
-				urls.push({ url: match[2], title: match[1] });
-			}
-		}
-
-		const googleDocsRegex = /\[(.*?)\]\((https?:\/\/docs\.google\.com\/[^\s)]+)\)/gi;
-		while ((match = googleDocsRegex.exec(text)) !== null) {
-			if (!urls.find(u => u.url === match[2])) {
-				urls.push({ url: match[2], title: match[1] });
-			}
-		}
-
+		while ((match = mdRegex.exec(text)) !== null) urls.push({ url: match[2], title: match[1] });
 		const urlRegex = /(https?:\/\/[^\s]+\.pdf[^\s)]*)/gi;
 		while ((match = urlRegex.exec(text)) !== null) {
 			if (!urls.find(u => u.url === match[0])) {
-				let fileName = match[0].split('/').pop().split('?')[0];
-				try {
-					fileName = decodeURIComponent(fileName);
-				} catch (e) {
-				}
-				urls.push({ url: match[0], title: fileName });
+				urls.push({ url: match[0], title: match[0].split('/').pop().split('?')[0] });
 			}
 		}
-
 		return urls;
 	}
 
@@ -395,7 +353,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	// ================================================
-	// Media Panel
+	// 미디어 패널 (기존 코드 유지)
 	// ================================================
 
 	function openMediaPanel(mediaItems, infoText, itemDataList) {
@@ -448,47 +406,26 @@ document.addEventListener('DOMContentLoaded', function () {
 			} else if (item.type === 'video') {
 				if (item.url.includes('vimeo.com') || item.url.includes('youtube.com') || item.url.includes('youtu.be')) {
 					let embedUrl = item.url;
-
-					if (item.url.includes('vimeo.com')) {
-						let videoId = null;
-						const vimeoMatch = item.url.match(/vimeo\.com\/(\d+)/);
-						if (vimeoMatch) {
-							videoId = vimeoMatch[1];
-						}
-						if (videoId) {
-							embedUrl = `https://player.vimeo.com/video/${videoId}`;
-						}
-					}
-					else if (item.url.includes('youtube.com/watch?v=')) {
-						const videoId = new URL(item.url).searchParams.get('v');
-						embedUrl = `https://www.youtube.com/embed/${videoId}`;
+					if (item.url.includes('youtube.com/watch?v=')) {
+						embedUrl = `https://www.youtube.com/embed/${new URL(item.url).searchParams.get('v')}`;
 					} else if (item.url.includes('youtu.be/')) {
-						const videoId = item.url.split('youtu.be/')[1]?.split('?')[0];
-						embedUrl = `https://www.youtube.com/embed/${videoId}`;
+						embedUrl = `https://www.youtube.com/embed/${item.url.split('youtu.be/')[1]?.split('?')[0]}`;
 					}
-
 					const iframe = document.createElement('iframe');
-					iframe.src = embedUrl;
-					iframe.width = '100%';
-					iframe.height = '200';
+					iframe.src = embedUrl; iframe.width = '100%'; iframe.height = '200';
 					iframe.style.cssText = 'border:0;border-radius:12px;';
-					iframe.allowFullscreen = true;
-					iframe.loading = 'lazy';
-					iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+					iframe.allowFullscreen = true; iframe.loading = 'lazy';
 					wrapper.appendChild(iframe);
 				} else {
 					const video = document.createElement('video');
-					video.controls = true;
-					video.preload = 'metadata';
+					video.controls = true; video.preload = 'metadata';
 					video.style.cssText = 'width:100%;border-radius:12px;';
 					video.onclick = () => openFullscreenViewer(item.url, 'video');
 					const titleLabel = document.createElement('div');
 					titleLabel.style.cssText = 'font-size:13px;color:#888;margin-top:4px;text-align:center;';
 					titleLabel.textContent = displayTitle;
-
 					const source = document.createElement('source');
-					source.src = item.url;
-					source.type = `video/${getVideoType(item.url)}`;
+					source.src = item.url; source.type = `video/${getVideoType(item.url)}`;
 					video.appendChild(source);
 					wrapper.appendChild(video);
 					wrapper.appendChild(titleLabel);
@@ -553,7 +490,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	// ================================================
-	// Changing Markdown
+	// 마크다운 변환 (기존 코드 유지)
 	// ================================================
 
 	function formatMarkdown(text) {
@@ -563,7 +500,6 @@ document.addEventListener('DOMContentLoaded', function () {
 		formatted = formatted.replace(/\[(.*?)\]\((.*?\.(mp4|mov|webm|avi))\)/gi, '🎬 <em>$1</em>');
 		formatted = formatted.replace(/\[(.*?)\]\((https?:\/\/player\.vimeo\.com\/[^)]+)\)/gi, '🎬 <em>$1</em>');
 		formatted = formatted.replace(/\[(.*?)\]\((https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)[^)]+)\)/gi, '🎬 <em>$1</em>');
-		formatted = formatted.replace(/\[📎\s*(.*?)\]\((https?:\/\/[^\s)]+)\)/gi, '📎 <em>$1</em>');
 		formatted = formatted.replace(/\[(.*?)\]\((.*?\.(pdf|doc|docx|xlsx|ppt|pptx))\)/gi, '📎 <em>$1</em>');
 		formatted = formatted.replace(/\[ITEM_DATA:\s*(.*?)\]/g, '');
 		formatted = formatted.replace(/\[MAP:\s*(.*?)\]/g, '');
@@ -583,7 +519,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	// ================================================
-	// Adding Message
+	// 메시지 추가 (기존 코드 유지)
 	// ================================================
 
 	function addMessage(text, sender) {
@@ -663,7 +599,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	// ================================================
-	// Sending Message
+	// 메시지 전송 (기존 코드 유지)
 	// ================================================
 
 	async function sendMessageToBackend() {
@@ -779,7 +715,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	// ================================================
-	// Welcome Message
+	// 웰컴 메시지 (기존 코드 유지)
 	// ================================================
 
 	function showWelcomeMessage() {
@@ -794,8 +730,8 @@ document.addEventListener('DOMContentLoaded', function () {
 			<div class="quick-questions-title">Quick questions:</div>
 			<button class="quick-btn" data-question="Can you tell me how I can get to Northfield Mount Hermon?">🚗 How to get here</button>
 			<button class="quick-btn" data-question="What is the application process? What documents do I need to complete and submit, and what is the deadline?">📝 Application Process</button>
-			<button class="quick-btn" data-question="What are the key NMH News taking place this month?">📅 School Events</button>
-			<button class="quick-btn" data-question="Tell me about actual school life at Northfield Mount Hermon?">🏫 Campus Life</button>
+			<button class="quick-btn" data-question="What are the key school events taking place this month?">📅 School Events</button>
+			<button class="quick-btn" data-question="What facilities does Northfield Mount Hermon have?">🏫 School Facilities</button>
 			<button class="quick-btn" data-question="How much does it cost to attend Northfield Mount Hermon School? What is the tuition?">🏫 Tuition</button>`;
 		chatbotMessages.appendChild(qq);
 		qq.querySelectorAll('.quick-btn').forEach(btn => {
@@ -811,6 +747,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	setTimeout(showWelcomeMessage, 1000);
 });
 
+// 전역 함수
 function closeMediaPanel() {
 	const panel = document.getElementById('mediaSlidePanel');
 	if (panel) {
