@@ -1,4 +1,4 @@
-// chatbot.js - 텍스트 챗봇 + LiveKit 음성 AI
+// chatbot.js - Text chatbot + LiveKit voice AI
 
 document.addEventListener('DOMContentLoaded', function () {
 	const toggleBtn = document.getElementById('chatbotToggleBtn');
@@ -14,6 +14,8 @@ document.addEventListener('DOMContentLoaded', function () {
 	const aiAvatarUrl = 'AI_assistant.png';
 	const userAvatarUrl = 'https://cdn-icons-png.flaticon.com/512/847/847969.png';
 
+	const LIVEKIT_CLIENT_URL = 'https://cdn.jsdelivr.net/npm/livekit-client@2.7.0/dist/livekit-client.umd.min.js';
+
 	// ================================================
 	// Voice (LiveKit WebRTC)
 	// ================================================
@@ -23,14 +25,128 @@ document.addEventListener('DOMContentLoaded', function () {
 	let micStream = null;
 
 	// ================================================
-	// LiveKit 음성 시작/종료
+	// Unified media type detection & extraction
+	// ================================================
+
+	function detectMediaTypeFromUrl(url) {
+		if (!url) return null;
+		const u = String(url).toLowerCase();
+
+		if (/vimeo\.com|youtube\.com|youtu\.be/.test(u)) return 'video';
+		if (/\.(mp4|mov|webm|avi)(\?|#|$)/.test(u)) return 'video';
+		if (/\.(jpg|jpeg|png|gif|webp|svg)(\?|#|$)/.test(u)) return 'image';
+		if (/\.(pdf|doc|docx|xlsx|ppt|pptx)(\?|#|$)/.test(u)) return 'file';
+		return null;
+	}
+
+	function extractMapUrls(text) {
+		const urls = [];
+		if (!text) return urls;
+		const regex = /\[MAP:\s*(.*?)\]/g;
+		let match;
+		while ((match = regex.exec(text)) !== null) urls.push(match[1].trim());
+		return urls;
+	}
+
+	// Extract all media items from text in a single pass.
+	// Returns { items: [{type,url,title,dataIndex}], itemDataList: [{title,description,rating,extra}], mapAddresses: [] }
+	function extractMediaItems(text) {
+		const result = { items: [], itemDataList: [], mapAddresses: [] };
+		if (!text) return result;
+
+		const seenUrls = new Set();
+		let dataIndex = 0;
+
+		function pushItem(url, title) {
+			const cleanUrl = String(url).split('?')[0];
+			const type = detectMediaTypeFromUrl(url);
+			if (!type) return;
+			if (seenUrls.has(cleanUrl)) return;
+			seenUrls.add(cleanUrl);
+
+			let displayTitle = title;
+			if (!displayTitle) {
+				if (type === 'image') displayTitle = 'Photo';
+				else if (type === 'video') displayTitle = 'Video';
+				else if (type === 'file') displayTitle = 'File';
+			}
+
+			result.items.push({
+				type,
+				url,
+				title: displayTitle,
+				dataIndex: dataIndex,
+			});
+			dataIndex++;
+		}
+
+		// 1) Markdown links: [title](url)
+		const mdLinkRegex = /\[([^\]]*?)\]\((https?:\/\/[^\s)]+)\)/g;
+		let match;
+		while ((match = mdLinkRegex.exec(text)) !== null) {
+			const title = match[1];
+			const url = match[2];
+			if (!detectMediaTypeFromUrl(url)) continue;
+			pushItem(url, title);
+		}
+
+		// 2) Markdown images: ![alt](url)
+		const mdImgRegex = /!\[([^\]]*?)\]\((https?:\/\/[^\s)]+)\)/g;
+		while ((match = mdImgRegex.exec(text)) !== null) {
+			const alt = match[1];
+			const url = match[2];
+			if (!detectMediaTypeFromUrl(url)) continue;
+			pushItem(url, alt);
+		}
+
+		// 3) Bare URLs
+		const bareUrlRegex = /(https?:\/\/[^\s)]+)/g;
+		while ((match = bareUrlRegex.exec(text)) !== null) {
+			const url = match[1];
+			const type = detectMediaTypeFromUrl(url);
+			if (!type) continue;
+			// Skip if already captured via markdown link/img
+			const cleanUrl = url.split('?')[0];
+			if (seenUrls.has(cleanUrl)) continue;
+			pushItem(url, null);
+		}
+
+		// 4) ITEM_DATA blocks
+		const itemDataMatches = text.match(/\[ITEM_DATA:\s*(.*?)\]/g);
+		if (itemDataMatches) {
+			result.itemDataList = itemDataMatches.map(m => {
+				const parts = m.replace(/\[ITEM_DATA:\s*|\]/g, '').split('|').map(s => s.trim());
+				return {
+					title: parts[0] || '',
+					description: parts[1] || '',
+					rating: parts[2] || '',
+					extra: parts.slice(3).join(' | '),
+				};
+			});
+
+			// Attach itemDataList entries to matching items by title
+			result.items.forEach((item, idx) => {
+				const dataEntry = result.itemDataList[idx];
+				if (dataEntry && dataEntry.title) {
+					item.title = dataEntry.title || item.title;
+				}
+			});
+		}
+
+		// 5) Map addresses
+		result.mapAddresses = extractMapUrls(text);
+
+		return result;
+	}
+
+	// ================================================
+	// LiveKit voice start/stop
 	// ================================================
 
 	voiceBtn?.addEventListener('click', async () => {
 		if (!isVoiceActive) {
 			try {
-				// ✅ getMediaDevices 제거 - LiveKit이 자동으로 요청
-				showConnectingUI();  // 연결 UI 표시
+				showConnectingUI();
 
 				const schoolId = "g43iWISB87NdD9Hmbe95BchTJVs1";
 				const VOICE = "Aoede";
@@ -38,7 +154,7 @@ document.addEventListener('DOMContentLoaded', function () {
 				if (!response.ok) throw new Error(`HTTP ${response.status}`);
 				const { token, url } = await response.json();
 
-				await import('https://cdn.jsdelivr.net/npm/livekit-client@latest/dist/livekit-client.umd.min.js');
+				await import(LIVEKIT_CLIENT_URL);
 				const { Room, RoomEvent, Track } = window.LivekitClient;
 
 				room = new Room({
@@ -46,10 +162,9 @@ document.addEventListener('DOMContentLoaded', function () {
 					dynacast: true,
 				});
 
-				// ✅ 이벤트 리스너들
 				room.on(RoomEvent.TrackSubscribed, (track) => {
 					if (track.kind === Track.Kind.Audio) {
-						console.log('🔊 AI audio track received');
+						console.log('AI audio track received');
 						const audioElement = track.attach();
 						document.body.appendChild(audioElement);
 						audioElement.play().catch(err => console.log('Play error:', err));
@@ -60,37 +175,27 @@ document.addEventListener('DOMContentLoaded', function () {
 					try {
 						const data = JSON.parse(new TextDecoder().decode(payload));
 						if (data.type === 'media' && data.items) {
-							// ✅ items와 itemDataList를 함께 생성 (텍스트 챗봇과 동일한 구조)
-							const items = [];
+							const mediaItems = [];
 							const itemDataList = [];
 							let dataIndex = 0;
 
 							data.items.forEach((item) => {
 								if (item.type === 'map') {
-									items.push({ type: 'map', address: item.address });
+									mediaItems.push({ type: 'map', address: item.address });
 									return;
 								}
 
-								// ✅ URL 기반 타입 재감지
-								let actualType = item.type;
 								const url = item.url || '';
+								// Re-detect type from URL; fall back to provided type
+								const detected = detectMediaTypeFromUrl(url) || item.type || 'image';
 
-								if (url.includes('vimeo.com') || url.includes('youtube.com') || url.includes('youtu.be') ||
-									/\.(mp4|mov|webm|avi)$/i.test(url)) {
-									actualType = 'video';
-								} else if (/\.(pdf|doc|docx|xlsx|ppt|pptx)$/i.test(url)) {
-									actualType = 'file';
-								}
-
-								// ✅ items에 dataIndex 부여
-								items.push({
-									type: actualType,
+								mediaItems.push({
+									type: detected,
 									url: item.url,
 									title: item.title || 'Media',
 									dataIndex: dataIndex,
 								});
 
-								// ✅ itemDataList에 title + description 저장
 								itemDataList.push({
 									title: item.title || '',
 									description: item.description || '',
@@ -101,24 +206,14 @@ document.addEventListener('DOMContentLoaded', function () {
 								dataIndex++;
 							});
 
-							const mapItems = items.filter(i => i.type === 'map');
-							const otherItems = items.filter(i => i.type !== 'map');
+							const mapItems = mediaItems.filter(i => i.type === 'map');
+							const otherItems = mediaItems.filter(i => i.type !== 'map');
 
-							// ✅ mapText 생성 (기존 로직 유지)
 							const mapText = mapItems.length > 0
 								? mapItems.map(m => `[MAP: ${m.address}]`).join('\n')
 								: '';
 
-							// ✅ openMediaPanel에 itemDataList 전달!
 							openMediaPanel(otherItems, mapText, itemDataList);
-
-							// ✅ "View Media" 버튼도 함께 추가 (선택)
-							const reopenBtn = document.createElement('button');
-							reopenBtn.className = 'media-preview-btn';
-							reopenBtn.textContent = '📷 View Media';
-							reopenBtn.style.cssText = 'background:#f0f4ff;border:1px solid #4361ee;color:#4361ee;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;margin-top:4px;';
-							reopenBtn.onclick = () => openMediaPanel(otherItems, mapText, itemDataList);
-							// 필요하면 chatbotMessages에 추가 (하지만 보이스 챗봇은 채팅 버블이 없으니 생략 가능)
 						}
 					} catch (e) {
 						console.error('Data parse error:', e);
@@ -126,16 +221,14 @@ document.addEventListener('DOMContentLoaded', function () {
 				});
 
 				room.on(RoomEvent.Disconnected, () => {
-					console.log('🔌 LiveKit disconnected');
+					console.log('LiveKit disconnected');
 					room = null;
 					stopVoice();
 				});
 
-				// ✅ 연결
 				await room.connect(url, token);
-				console.log('✅ LiveKit connected');
+				console.log('LiveKit connected');
 
-				// ✅ 연결 완료 표시
 				const ui = document.getElementById('voiceConnectingUI');
 				if (ui) {
 					const statusText = ui.querySelector('.voice-status-text');
@@ -143,11 +236,9 @@ document.addEventListener('DOMContentLoaded', function () {
 					ui.classList.add('connected');
 				}
 
-				// ✅ 마이크 활성화 (한 번만 팝업)
 				await room.localParticipant.setMicrophoneEnabled(true);
-				console.log('🎤 Microphone enabled');
+				console.log('Microphone enabled');
 
-				// ✅ 짧게 "Connected" 보여주고 숨기기
 				setTimeout(() => {
 					hideConnectingUI();
 				}, 800);
@@ -165,21 +256,16 @@ document.addEventListener('DOMContentLoaded', function () {
 		}
 	});
 
-	// 연결 UI 표시
 	function showConnectingUI() {
 		const ui = document.getElementById('voiceConnectingUI');
 		if (ui) {
 			ui.style.display = 'flex';
-			// 상태 텍스트 변경
 			const statusText = ui.querySelector('.voice-status-text');
 			if (statusText) statusText.textContent = 'Connecting...';
-
-			// 애니메이션 클래스 추가
 			ui.classList.add('connecting');
 		}
 	}
 
-	// 연결 완료 UI 숨기기
 	function hideConnectingUI() {
 		const ui = document.getElementById('voiceConnectingUI');
 		if (ui) {
@@ -188,21 +274,18 @@ document.addEventListener('DOMContentLoaded', function () {
 		}
 	}
 
-	// 전역 함수
 	function cancelVoice() {
 		const ui = document.getElementById('voiceConnectingUI');
 		if (ui) ui.style.display = 'none';
-
-		// voiceBtn 클릭과 동일하게 중지
-		const voiceBtn = document.getElementById('voiceInputBtn');
-		if (voiceBtn) voiceBtn.click();
+		const btn = document.getElementById('voiceInputBtn');
+		if (btn) btn.click();
 	}
 
 	function stopVoice() {
 		if (room) {
 			const r = room;
-			room = null;  
-			r.disconnect();
+			room = null;
+			try { r.disconnect(); } catch (e) { console.warn('Disconnect error:', e); }
 		}
 		if (micStream) {
 			micStream.getTracks().forEach(t => t.stop());
@@ -213,7 +296,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	// ================================================
-	// 기존 텍스트 챗봇 코드 (유지)
+	// Text chatbot
 	// ================================================
 
 	if (window.innerWidth <= 600) {
@@ -247,7 +330,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	});
 
 	closeBtn.addEventListener('click', function () {
-		speechSynthesis.cancel();
+		if (window.speechSynthesis) window.speechSynthesis.cancel();
 		stopVoice();
 		chatbotWindow.style.display = 'none';
 		closeMediaPanel();
@@ -258,7 +341,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	chatbotInput.addEventListener('keypress', function (e) {
 		if (e.key === 'Enter' && !e.shiftKey) {
 			e.preventDefault();
-			speechSynthesis.cancel();
+			if (window.speechSynthesis) window.speechSynthesis.cancel();
 			sendMessageToBackend();
 		}
 	});
@@ -279,83 +362,25 @@ document.addEventListener('DOMContentLoaded', function () {
 	});
 
 	// ================================================
-	// 유틸리티 (기존 코드 유지)
+	// Utilities
 	// ================================================
 
 	function getCurrentTime() {
 		return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
 	}
 
-	function extractImageUrls(text) {
-		const urls = [];
-		const mdRegex = /!\[.*?\]\((.*?)\)/g;
-		let match;
-		while ((match = mdRegex.exec(text)) !== null) {
-			let url = match[1].split('?')[0];
-			if (!url.includes('vimeo.com') && !url.includes('youtube.com') && !url.includes('youtu.be')) urls.push(url);
-		}
-		const urlRegex = /(https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp))/gi;
-		while ((match = urlRegex.exec(text)) !== null) {
-			let url = match[0].split('?')[0];
-			if (!url.includes('vimeo.com') && !url.includes('youtube.com') && !url.includes('youtu.be') && !url.endsWith('.pdf')) {
-				if (!urls.includes(url)) urls.push(url);
-			}
-		}
-		return urls;
-	}
-
-	function extractVideoUrls(text) {
-		const urls = [];
-		const mdRegex = /\[.*?\]\((.*?\.(mp4|mov|webm|avi))\)/gi;
-		let match;
-		while ((match = mdRegex.exec(text)) !== null) urls.push(match[1]);
-		const urlRegex = /(https?:\/\/[^\s]+\.(mp4|mov|webm|avi))/gi;
-		while ((match = urlRegex.exec(text)) !== null) {
-			if (!urls.includes(match[0])) urls.push(match[0]);
-		}
-		const vimeoRegex = /(https?:\/\/player\.vimeo\.com\/video\/\d+[^\s]*)/gi;
-		while ((match = vimeoRegex.exec(text)) !== null) {
-			if (!urls.includes(match[0])) urls.push(match[0]);
-		}
-		const youtubeRegex = /(https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)[^\s&]+)/gi;
-		while ((match = youtubeRegex.exec(text)) !== null) {
-			if (!urls.includes(match[0])) urls.push(match[0]);
-		}
-		return urls;
-	}
-
-	function extractMapUrls(text) {
-		const urls = [];
-		const regex = /\[MAP:\s*(.*?)\]/g;
-		let match;
-		while ((match = regex.exec(text)) !== null) urls.push(match[1].trim());
-		return urls;
-	}
-
-	function extractFileUrls(text) {
-		const urls = [];
-		const mdRegex = /\[(.*?)\]\((https?:\/\/[^\s)]*\.pdf[^\s)]*)\)/gi;
-		let match;
-		while ((match = mdRegex.exec(text)) !== null) urls.push({ url: match[2], title: match[1] });
-		const urlRegex = /(https?:\/\/[^\s]+\.pdf[^\s)]*)/gi;
-		while ((match = urlRegex.exec(text)) !== null) {
-			if (!urls.find(u => u.url === match[0])) {
-				urls.push({ url: match[0], title: match[0].split('/').pop().split('?')[0] });
-			}
-		}
-		return urls;
-	}
-
 	function getVideoType(url) {
-		if (url.endsWith('.mp4')) return 'mp4';
-		if (url.endsWith('.mov')) return 'mov';
-		if (url.endsWith('.webm')) return 'webm';
-		if (url.endsWith('.avi')) return 'avi';
+		if (!url) return 'mp4';
+		const clean = url.split('?')[0].toLowerCase();
+		if (clean.endsWith('.mp4')) return 'mp4';
+		if (clean.endsWith('.mov')) return 'mov';
+		if (clean.endsWith('.webm')) return 'webm';
+		if (clean.endsWith('.avi')) return 'avi';
 		return 'mp4';
 	}
 
 	// ================================================
-	// 미디어 패널 (기존 코드 유지)
+	// Media panel
 	// ================================================
 
 	function openMediaPanel(mediaItems, infoText, itemDataList) {
@@ -455,24 +480,21 @@ document.addEventListener('DOMContentLoaded', function () {
 			}
 		});
 
-		if (infoText) {
-			const mapAddresses = extractMapUrls(infoText);
-			if (mapAddresses.length > 0) {
-				mapAddresses.forEach(address => {
-					const mapDiv = document.createElement('div');
-					mapDiv.className = 'media-map-section';
-					mapDiv.style.cssText = 'margin-bottom:16px;border-radius:12px;overflow:hidden;';
-					const encodedAddress = encodeURIComponent(address);
-					mapDiv.innerHTML = `
-						<div style="font-weight:600;font-size:13px;margin-bottom:6px;color:#333;">📍 ${address}</div>
-						<iframe width="100%" height="200" style="border:0;border-radius:8px;" loading="lazy"
-							referrerpolicy="no-referrer-when-downgrade"
-							src="https://www.google.com/maps/embed/v1/place?key=AIzaSyAAi1AjHzAh-Cu-5YuxSSOu8L3e2sU9oNA&q=${encodedAddress}"></iframe>
-						<a href="https://www.google.com/maps/search/?api=1&query=${encodedAddress}" target="_blank"
-							style="font-size:12px;color:#4361ee;text-decoration:none;display:inline-block;margin-top:4px;">🔗 Open in Google Maps</a>`;
-					content.appendChild(mapDiv);
-				});
-			}
+		if (mapAddresses.length > 0) {
+			mapAddresses.forEach(address => {
+				const mapDiv = document.createElement('div');
+				mapDiv.className = 'media-map-section';
+				mapDiv.style.cssText = 'margin-bottom:16px;border-radius:12px;overflow:hidden;';
+				const encodedAddress = encodeURIComponent(address);
+				mapDiv.innerHTML = `
+					<div style="font-weight:600;font-size:13px;margin-bottom:6px;color:#333;">📍 ${address}</div>
+					<iframe width="100%" height="200" style="border:0;border-radius:8px;" loading="lazy"
+						referrerpolicy="no-referrer-when-downgrade"
+						src="https://www.google.com/maps/embed/v1/place?key=AIzaSyAAi1AjHzAh-Cu-5YuxSSOu8L3e2sU9oNA&q=${encodedAddress}"></iframe>
+					<a href="https://www.google.com/maps/search/?api=1&query=${encodedAddress}" target="_blank"
+						style="font-size:12px;color:#4361ee;text-decoration:none;display:inline-block;margin-top:4px;">🔗 Open in Google Maps</a>`;
+				content.appendChild(mapDiv);
+			});
 		}
 
 		const rect = chatbotWindow.getBoundingClientRect();
@@ -492,7 +514,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	// ================================================
-	// 마크다운 변환 (기존 코드 유지)
+	// Markdown formatting
 	// ================================================
 
 	function formatMarkdown(text) {
@@ -521,7 +543,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	// ================================================
-	// 메시지 추가 (기존 코드 유지)
+	// Add message
 	// ================================================
 
 	function addMessage(text, sender) {
@@ -550,35 +572,16 @@ document.addEventListener('DOMContentLoaded', function () {
 		content.appendChild(time);
 
 		if (sender === 'bot') {
-			const images = extractImageUrls(text);
-			const videos = extractVideoUrls(text);
-			const files = extractFileUrls(text);
-			let dataIndex = 0;
-			const items = [
-				...images.map((url) => ({ type: 'image', url, title: 'Photo', dataIndex: dataIndex++ })),
-				...videos.map((url) => ({ type: 'video', url, title: 'Video', dataIndex: dataIndex++ })),
-				...files.map(f => ({ type: 'file', url: f.url, title: decodeURIComponent(f.url.split('/').pop().split('?')[0]), dataIndex: dataIndex++ }))
-			];
+			const extracted = extractMediaItems(text);
 
-			const itemDataMatches = text.match(/\[ITEM_DATA:\s*(.*?)\]/g);
-			let itemDataList = [];
-			if (itemDataMatches) {
-				itemDataList = itemDataMatches.map(m => {
-					const parts = m.replace(/\[ITEM_DATA:\s*|\]/g, '').split('|').map(s => s.trim());
-					return { title: parts[0] || '', description: parts[1] || '', rating: parts[2] || '', extra: parts.slice(3).join(' | ') };
-				});
-			}
-
-			const mapAddresses = extractMapUrls(text);
-			if (items.length > 0 || mapAddresses.length > 0) {
-				const uniqueItems = items.filter((item, index, self) => index === self.findIndex(t => t.url === item.url));
-				openMediaPanel(uniqueItems, text, itemDataList);
+			if (extracted.items.length > 0 || extracted.mapAddresses.length > 0) {
+				openMediaPanel(extracted.items, text, extracted.itemDataList);
 
 				const reopenBtn = document.createElement('button');
 				reopenBtn.className = 'media-preview-btn';
 				reopenBtn.textContent = '📷 View Media';
 				reopenBtn.style.cssText = 'background:#f0f4ff;border:1px solid #4361ee;color:#4361ee;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;margin-top:4px;';
-				reopenBtn.onclick = () => openMediaPanel(items, text, itemDataList);
+				reopenBtn.onclick = () => openMediaPanel(extracted.items, text, extracted.itemDataList);
 				content.appendChild(reopenBtn);
 			}
 		}
@@ -601,7 +604,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	// ================================================
-	// 메시지 전송 (기존 코드 유지)
+	// Send message
 	// ================================================
 
 	async function sendMessageToBackend() {
@@ -689,12 +692,11 @@ document.addEventListener('DOMContentLoaded', function () {
 							fullResponse += d.content;
 							respDiv.innerHTML = formatMarkdown(fullResponse);
 							chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+
 							if (!panelOpened && fullResponse.length > 100) {
-								const imgs = extractImageUrls(fullResponse);
-								const vids = extractVideoUrls(fullResponse);
-								const fils = extractFileUrls(fullResponse);
-								if (imgs.length > 0 || vids.length > 0 || fils.length > 0) {
-									openMediaPanel([...imgs.map(u => ({ type: 'image', url: u, title: 'Photo' })), ...vids.map(u => ({ type: 'video', url: u, title: 'Video' })), ...fils.map(f => ({ type: 'file', url: f.url, title: f.title }))], fullResponse, []);
+								const extracted = extractMediaItems(fullResponse);
+								if (extracted.items.length > 0 || extracted.mapAddresses.length > 0) {
+									openMediaPanel(extracted.items, fullResponse, extracted.itemDataList);
 									panelOpened = true;
 								}
 							}
@@ -717,7 +719,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	// ================================================
-	// 웰컴 메시지 (기존 코드 유지)
+	// Welcome message
 	// ================================================
 
 	function showWelcomeMessage() {
@@ -749,7 +751,10 @@ document.addEventListener('DOMContentLoaded', function () {
 	setTimeout(showWelcomeMessage, 1000);
 });
 
-// 전역 함수
+// ================================================
+// Global functions
+// ================================================
+
 function closeMediaPanel() {
 	const panel = document.getElementById('mediaSlidePanel');
 	if (panel) {
