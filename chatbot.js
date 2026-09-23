@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	let room = null;
 	let isVoiceActive = false;
 	let micStream = null;
+	let aiAudioElement = null;
 
 	let lastMediaSignature = '';
 	let lastMediaTime = 0;
@@ -32,6 +33,11 @@ document.addEventListener('DOMContentLoaded', function () {
 	voiceBtn?.addEventListener('click', async () => {
 		if (!isVoiceActive) {
 			try {
+				if (room) {
+					room.disconnect();
+					room = null;
+				}
+
 				showConnectingUI();
 
 				const schoolId = "g43iWISB87NdD9Hmbe95BchTJVs1";
@@ -51,9 +57,24 @@ document.addEventListener('DOMContentLoaded', function () {
 				room.on(RoomEvent.TrackSubscribed, (track) => {
 					if (track.kind === Track.Kind.Audio) {
 						console.log('🔊 AI audio track received');
-						const audioElement = track.attach();
-						document.body.appendChild(audioElement);
-						audioElement.play().catch(err => console.log('Play error:', err));
+
+						if (aiAudioElement) {
+							aiAudioElement.pause();
+							aiAudioElement.srcObject = null;
+							aiAudioElement.remove();
+							aiAudioElement = null;
+						}
+
+						aiAudioElement = track.attach();
+						aiAudioElement.style.display = 'none';
+						document.body.appendChild(aiAudioElement);
+						aiAudioElement.play().catch(err => console.log('Play error:', err));
+					}
+				});
+
+				room.on(RoomEvent.TrackUnsubscribed, (track) => {
+					if (track.kind === Track.Kind.Audio) {
+						track.detach().forEach(el => el.remove());
 					}
 				});
 
@@ -196,6 +217,12 @@ document.addEventListener('DOMContentLoaded', function () {
 		if (micStream) {
 			micStream.getTracks().forEach(t => t.stop());
 			micStream = null;
+		}
+		if (aiAudioElement) {
+			aiAudioElement.pause();
+			aiAudioElement.srcObject = null;
+			aiAudioElement.remove();
+			aiAudioElement = null;
 		}
 		isVoiceActive = false;
 		voiceBtn.textContent = '🎤';
@@ -422,22 +449,16 @@ document.addEventListener('DOMContentLoaded', function () {
 				if (item.url.includes('vimeo.com') || item.url.includes('youtube.com') || item.url.includes('youtu.be')) {
 					let embedUrl = item.url;
 
-					// Vimeo: convert to player.vimeo.com format
 					if (item.url.includes('vimeo.com')) {
-						// Extract video ID from various Vimeo URL formats
 						let videoId = null;
-
-						// Format: https://vimeo.com/123456789
 						const vimeoMatch = item.url.match(/vimeo\.com\/(\d+)/);
 						if (vimeoMatch) {
 							videoId = vimeoMatch[1];
 						}
-
 						if (videoId) {
 							embedUrl = `https://player.vimeo.com/video/${videoId}`;
 						}
 					}
-					// YouTube
 					else if (item.url.includes('youtube.com/watch?v=')) {
 						const videoId = new URL(item.url).searchParams.get('v');
 						embedUrl = `https://www.youtube.com/embed/${videoId}`;
@@ -456,7 +477,6 @@ document.addEventListener('DOMContentLoaded', function () {
 					iframe.allow = 'autoplay; fullscreen; picture-in-picture';
 					wrapper.appendChild(iframe);
 				} else {
-					// Direct video files (.mp4, .mov, etc.)
 					const video = document.createElement('video');
 					video.controls = true;
 					video.preload = 'metadata';
