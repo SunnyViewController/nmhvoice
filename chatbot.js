@@ -341,21 +341,42 @@ document.addEventListener('DOMContentLoaded', function () {
 
 	function extractVideoUrls(text) {
 		const urls = [];
+
+		// 1) mp4/mov/webm/avi (마크다운)
 		const mdRegex = /\[.*?\]\((.*?\.(mp4|mov|webm|avi))\)/gi;
 		let match;
 		while ((match = mdRegex.exec(text)) !== null) urls.push(match[1]);
+
+		// 2) mp4/mov/webm/avi (bare URL)
 		const urlRegex = /(https?:\/\/[^\s]+\.(mp4|mov|webm|avi))/gi;
 		while ((match = urlRegex.exec(text)) !== null) {
 			if (!urls.includes(match[0])) urls.push(match[0]);
 		}
-		const vimeoRegex = /(https?:\/\/player\.vimeo\.com\/video\/\d+[^\s]*)/gi;
-		while ((match = vimeoRegex.exec(text)) !== null) {
+
+		// 3) player.vimeo.com/video/12345
+		const vimeoEmbedRegex = /(https?:\/\/player\.vimeo\.com\/video\/\d+[^\s]*)/gi;
+		while ((match = vimeoEmbedRegex.exec(text)) !== null) {
 			if (!urls.includes(match[0])) urls.push(match[0]);
 		}
+
+		// ★ 4) vimeo.com/12345 (공유 URL, 마크다운 링크) — 새로 추가!
+		const vimeoShareMdRegex = /\[.*?\]\((https?:\/\/vimeo\.com\/\d+[^\s)]*)\)/gi;
+		while ((match = vimeoShareMdRegex.exec(text)) !== null) {
+			if (!urls.includes(match[1])) urls.push(match[1]);
+		}
+
+		// ★ 5) vimeo.com/12345 (bare URL) — 새로 추가!
+		const vimeoShareBareRegex = /(https?:\/\/vimeo\.com\/\d+[^\s)]*)/gi;
+		while ((match = vimeoShareBareRegex.exec(text)) !== null) {
+			if (!urls.includes(match[0])) urls.push(match[0]);
+		}
+
+		// 6) YouTube
 		const youtubeRegex = /(https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)[^\s&]+)/gi;
 		while ((match = youtubeRegex.exec(text)) !== null) {
 			if (!urls.includes(match[0])) urls.push(match[0]);
 		}
+
 		return urls;
 	}
 
@@ -369,15 +390,47 @@ document.addEventListener('DOMContentLoaded', function () {
 
 	function extractFileUrls(text) {
 		const urls = [];
-		const mdRegex = /\[(.*?)\]\((https?:\/\/[^\s)]*\.pdf[^\s)]*)\)/gi;
+
+		// 1) 📎 접두사가 붙은 마크다운 링크 (instruction #15 형식)
+		// [📎 Title](URL) 패턴
+		const emojiMdRegex = /\[📎\s*([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gi;
 		let match;
-		while ((match = mdRegex.exec(text)) !== null) urls.push({ url: match[2], title: match[1] });
-		const urlRegex = /(https?:\/\/[^\s]+\.pdf[^\s)]*)/gi;
-		while ((match = urlRegex.exec(text)) !== null) {
+		while ((match = emojiMdRegex.exec(text)) !== null) {
+			if (!urls.find(u => u.url === match[2])) {
+				urls.push({ url: match[2], title: match[1] });
+			}
+		}
+
+		// 2) 📎 prefix 없이도 Google Workspace URL이면 file로 처리
+		const gwsRegex = /\[([^\]]+)\]\((https?:\/\/(?:docs|drive|sheets|slides)\.google\.com\/[^\s)]+)\)/gi;
+		while ((match = gwsRegex.exec(text)) !== null) {
+			if (!urls.find(u => u.url === match[2])) {
+				urls.push({ url: match[2], title: match[1] });
+			}
+		}
+
+		// 3) bare Google Workspace URL
+		const gwsBareRegex = /(https?:\/\/(?:docs|drive|sheets|slides)\.google\.com\/[^\s)]+)/gi;
+		while ((match = gwsBareRegex.exec(text)) !== null) {
+			if (!urls.find(u => u.url === match[0])) {
+				urls.push({ url: match[0], title: 'Document' });
+			}
+		}
+
+		// 4) 기존 .pdf 패턴 유지
+		const pdfMdRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]*\.pdf[^\s)]*)\)/gi;
+		while ((match = pdfMdRegex.exec(text)) !== null) {
+			if (!urls.find(u => u.url === match[2])) {
+				urls.push({ url: match[2], title: match[1] });
+			}
+		}
+		const pdfBareRegex = /(https?:\/\/[^\s]+\.pdf[^\s)]*)/gi;
+		while ((match = pdfBareRegex.exec(text)) !== null) {
 			if (!urls.find(u => u.url === match[0])) {
 				urls.push({ url: match[0], title: match[0].split('/').pop().split('?')[0] });
 			}
 		}
+
 		return urls;
 	}
 
@@ -548,7 +601,7 @@ document.addEventListener('DOMContentLoaded', function () {
 		formatted = formatted.replace(/\[(.*?)\]\((.*?\.(mp4|mov|webm|avi))\)/gi, '🎬 <em>$1</em>');
 		formatted = formatted.replace(/\[(.*?)\]\((https?:\/\/player\.vimeo\.com\/[^)]+)\)/gi, '🎬 <em>$1</em>');
 		formatted = formatted.replace(/\[(.*?)\]\((https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)[^)]+)\)/gi, '🎬 <em>$1</em>');
-		formatted = formatted.replace(/\[(.*?)\]\((.*?\.(pdf|doc|docx|xlsx|ppt|pptx))\)/gi, '📎 <em>$1</em>');
+		formatted = formatted.replace(/\[📎\s*([^\]]+)\]\([^)]+\)/g, '📎 <em>$1</em>');
 		formatted = formatted.replace(/\[ITEM_DATA:\s*(.*?)\]/g, '');
 		formatted = formatted.replace(/\[MAP:\s*(.*?)\]/g, '');
 		formatted = formatted.replace(/\n{3,}/g, '\n\n');
@@ -714,7 +767,7 @@ document.addEventListener('DOMContentLoaded', function () {
 			const decoder = new TextDecoder();
 			let buffer = '', fullResponse = '';
 			const isMobile = window.innerWidth <= 600;
-			let panelOpened = isMobile;
+			let panelOpened = false;
 
 			while (true) {
 				const { done, value } = await reader.read();
@@ -735,7 +788,7 @@ document.addEventListener('DOMContentLoaded', function () {
 							fullResponse += d.content;
 							respDiv.innerHTML = formatMarkdown(fullResponse);
 							chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
-							if (!panelOpened && fullResponse.length > 100) {
+							if (!panelOpened && fullResponse.length > 30) {
 								const imgs = extractImageUrls(fullResponse);
 								const vids = extractVideoUrls(fullResponse);
 								const fils = extractFileUrls(fullResponse);
