@@ -91,7 +91,14 @@ document.addEventListener('DOMContentLoaded', function () {
 									items.push({ type: 'map', address: item.address });
 									return;
 								}
-
+								if (item.type === 'directions') {
+									items.push({
+										type: 'directions',
+										destination: item.destination,
+										origin: item.origin || 'current',
+									});
+									return;
+								}
 								let actualType = item.type;
 								const url = item.url || '';
 
@@ -510,6 +517,53 @@ document.addEventListener('DOMContentLoaded', function () {
 				link.style.cssText = 'display:flex;align-items:center;gap:8px;padding:12px;background:#f0f4ff;border-radius:8px;text-decoration:none;color:#4361ee;font-size:14px;';
 				link.innerHTML = `📎 <span>${displayTitle}</span> <span style="font-size:11px;color:#888;">(Click to open)</span>`;
 				wrapper.appendChild(link);
+			} else if (item.type === 'directions') {
+				const dest = item.destination;
+				const origin = item.origin || 'current';
+				const encodedDest = encodeURIComponent(dest);
+
+				const getOrigin = () => new Promise((resolve) => {
+					if (origin !== 'current') {
+						resolve(origin);
+						return;
+					}
+					if (!navigator.geolocation) {
+						resolve('My+Location');
+						return;
+					}
+					navigator.geolocation.getCurrentPosition(
+						(pos) => resolve(`${pos.coords.latitude},${pos.coords.longitude}`),
+						() => resolve('My+Location'),
+						{ enableHighAccuracy: true, timeout: 5000 }
+					);
+				});
+
+				// 로딩 표시
+				wrapper.innerHTML = '<div style="padding:12px;color:#888;font-size:13px;">🧭 위치 확인 중...</div>';
+
+				getOrigin().then((originValue) => {
+					const encodedOrigin = encodeURIComponent(originValue).replace(/%2C/g, ',');
+
+					const embedUrl =
+						`https://www.google.com/maps/embed/v1/directions` +
+						`?key=AIzaSyAAi1AjHzAh-Cu-5YuxSSOu8L3e2sU9oNA` +
+						`&origin=${encodedOrigin}` +
+						`&destination=${encodedDest}` +
+						`&mode=driving`;
+
+					wrapper.innerHTML = `
+            <div style="font-weight:600;font-size:13px;margin-bottom:6px;color:#333;">
+                🧭 Directions to ${dest}
+            </div>
+            <iframe width="100%" height="250" style="border:0;border-radius:8px;"
+                loading="lazy" referrerpolicy="no-referrer-when-downgrade"
+                src="${embedUrl}"></iframe>
+            <a href="https://www.google.com/maps/dir/?api=1&origin=${encodedOrigin}&destination=${encodedDest}"
+               target="_blank"
+               style="font-size:12px;color:#4361ee;text-decoration:none;display:inline-block;margin-top:4px;">
+                🔗 Open in Google Maps (turn-by-turn)
+            </a>`;
+				});
 			}
 			content.appendChild(wrapper);
 
