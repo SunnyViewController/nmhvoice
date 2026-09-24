@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 				const schoolId = "g43iWISB87NdD9Hmbe95BchTJVs1";
 				const VOICE = "Aoede";
-				const response = await fetch(`https://livekit-token-319080578768.us-central1.run.app?school_id=${schoolId}`);
+				const response = await fetch(`https://livekit-token-319080578768.us-central1.run.app?school_id=${schoolId}&voice=${VOICE}`);
 				if (!response.ok) throw new Error(`HTTP ${response.status}`);
 				const { token, url } = await response.json();
 
