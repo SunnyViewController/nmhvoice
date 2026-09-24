@@ -1,6 +1,5 @@
 // chatbot.js
 
-// DOM이 로드된 후 실행
 document.addEventListener('DOMContentLoaded', function () {
 	const toggleBtn = document.getElementById('chatbotToggleBtn');
 	const closeBtn = document.getElementById('chatbotCloseBtn');
@@ -24,14 +23,13 @@ document.addEventListener('DOMContentLoaded', function () {
 	let micStream = null;
 
 	// ================================================
-	// LiveKit 음성 시작/종료
+	// LiveKit voice start/end
 	// ================================================
 
 	voiceBtn?.addEventListener('click', async () => {
 		if (!isVoiceActive) {
 			try {
-				// ✅ getMediaDevices 제거 - LiveKit이 자동으로 요청
-				showConnectingUI();  // 연결 UI 표시
+				showConnectingUI();  
 
 				const schoolId = "g43iWISB87NdD9Hmbe95BchTJVs1";
 				const VOICE = "Aoede";
@@ -47,22 +45,18 @@ document.addEventListener('DOMContentLoaded', function () {
 					dynacast: true,
 				});
 
-				// ✅ 이벤트 리스너들
 				room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
 					if (track.kind !== Track.Kind.Audio) return;
-					// 자기 마이크는 무시
 					if (participant.identity === room.localParticipant.identity) return;
 
 					console.log('🔊 AI audio track received:', track.sid);
 
-					// ★ 이전 에이전트 오디오 엘리먼트 정리 (핵심)
 					document.querySelectorAll('audio[data-agent-audio="1"]').forEach(el => {
 						try { el.pause(); } catch (e) { }
 						try { el.srcObject = null; } catch (e) { }
 						try { el.remove(); } catch (e) { }
 					});
 
-					// ★ 새 트랙만 재생
 					const audioElement = track.attach();
 					audioElement.dataset.agentAudio = '1';
 					audioElement.dataset.sid = track.sid;
@@ -71,7 +65,6 @@ document.addEventListener('DOMContentLoaded', function () {
 					audioElement.play().catch(err => console.log('Play error:', err));
 				});
 
-				// ★ 이 핸들러는 새로 추가 (지금 없음)
 				room.on(RoomEvent.TrackUnsubscribed, (track) => {
 					if (track.kind !== Track.Kind.Audio) return;
 					console.log('🔇 AI audio track removed:', track.sid);
@@ -89,7 +82,6 @@ document.addEventListener('DOMContentLoaded', function () {
 					try {
 						const data = JSON.parse(new TextDecoder().decode(payload));
 						if (data.type === 'media' && data.items) {
-							// ✅ items와 itemDataList를 함께 생성 (텍스트 챗봇과 동일한 구조)
 							const items = [];
 							const itemDataList = [];
 							let dataIndex = 0;
@@ -100,7 +92,6 @@ document.addEventListener('DOMContentLoaded', function () {
 									return;
 								}
 
-								// ✅ URL 기반 타입 재감지
 								let actualType = item.type;
 								const url = item.url || '';
 
@@ -111,7 +102,6 @@ document.addEventListener('DOMContentLoaded', function () {
 									actualType = 'file';
 								}
 
-								// ✅ items에 dataIndex 부여
 								items.push({
 									type: actualType,
 									url: item.url,
@@ -119,7 +109,6 @@ document.addEventListener('DOMContentLoaded', function () {
 									dataIndex: dataIndex,
 								});
 
-								// ✅ itemDataList에 title + description 저장
 								itemDataList.push({
 									title: item.title || '',
 									description: item.description || '',
@@ -133,21 +122,17 @@ document.addEventListener('DOMContentLoaded', function () {
 							const mapItems = items.filter(i => i.type === 'map');
 							const otherItems = items.filter(i => i.type !== 'map');
 
-							// ✅ mapText 생성 (기존 로직 유지)
 							const mapText = mapItems.length > 0
 								? mapItems.map(m => `[MAP: ${m.address}]`).join('\n')
 								: '';
 
-							// ✅ openMediaPanel에 itemDataList 전달!
 							openMediaPanel(otherItems, mapText, itemDataList);
 
-							// ✅ "View Media" 버튼도 함께 추가 (선택)
 							const reopenBtn = document.createElement('button');
 							reopenBtn.className = 'media-preview-btn';
 							reopenBtn.textContent = '📷 View Media';
 							reopenBtn.style.cssText = 'background:#f0f4ff;border:1px solid #4361ee;color:#4361ee;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;margin-top:4px;';
 							reopenBtn.onclick = () => openMediaPanel(otherItems, mapText, itemDataList);
-							// 필요하면 chatbotMessages에 추가 (하지만 보이스 챗봇은 채팅 버블이 없으니 생략 가능)
 						}
 					} catch (e) {
 						console.error('Data parse error:', e);
@@ -159,11 +144,9 @@ document.addEventListener('DOMContentLoaded', function () {
 					stopVoice();
 				});
 
-				// ✅ 연결
 				await room.connect(url, token);
 				console.log('✅ LiveKit connected');
 
-				// ✅ 연결 완료 표시
 				const ui = document.getElementById('voiceConnectingUI');
 				if (ui) {
 					const statusText = ui.querySelector('.voice-status-text');
@@ -171,11 +154,9 @@ document.addEventListener('DOMContentLoaded', function () {
 					ui.classList.add('connected');
 				}
 
-				// ✅ 마이크 활성화 (한 번만 팝업)
 				await room.localParticipant.setMicrophoneEnabled(true);
 				console.log('🎤 Microphone enabled');
 
-				// ✅ 짧게 "Connected" 보여주고 숨기기
 				setTimeout(() => {
 					hideConnectingUI();
 				}, 800);
@@ -193,21 +174,18 @@ document.addEventListener('DOMContentLoaded', function () {
 		}
 	});
 
-	// 연결 UI 표시
 	function showConnectingUI() {
 		const ui = document.getElementById('voiceConnectingUI');
 		if (ui) {
 			ui.style.display = 'flex';
-			// 상태 텍스트 변경
+
 			const statusText = ui.querySelector('.voice-status-text');
 			if (statusText) statusText.textContent = 'Connecting...';
 
-			// 애니메이션 클래스 추가
 			ui.classList.add('connecting');
 		}
 	}
 
-	// 연결 완료 UI 숨기기
 	function hideConnectingUI() {
 		const ui = document.getElementById('voiceConnectingUI');
 		if (ui) {
@@ -216,12 +194,10 @@ document.addEventListener('DOMContentLoaded', function () {
 		}
 	}
 
-	// 전역 함수
 	function cancelVoice() {
 		const ui = document.getElementById('voiceConnectingUI');
 		if (ui) ui.style.display = 'none';
 
-		// voiceBtn 클릭과 동일하게 중지
 		const voiceBtn = document.getElementById('voiceInputBtn');
 		if (voiceBtn) voiceBtn.click();
 	}
@@ -236,7 +212,6 @@ document.addEventListener('DOMContentLoaded', function () {
 			micStream = null;
 		}
 
-		// ★ 에이전트 오디오 엘리먼트 정리
 		document.querySelectorAll('audio[data-agent-audio="1"]').forEach(el => {
 			try { el.pause(); } catch (e) { }
 			try { el.srcObject = null; } catch (e) { }
@@ -248,7 +223,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	// ================================================
-	// 기존 텍스트 챗봇 코드 (유지)
+	// Text Chatbot
 	// ================================================
 
 	if (window.innerWidth <= 600) {
@@ -314,7 +289,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	});
 
 	// ================================================
-	// 유틸리티 (기존 코드 유지)
+	//  Utility
 	// ================================================
 
 	function getCurrentTime() {
@@ -342,7 +317,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	function extractVideoUrls(text) {
 		const urls = [];
 
-		// 1) mp4/mov/webm/avi (마크다운)
+		// 1) mp4/mov/webm/avi (Markdown)
 		const mdRegex = /\[.*?\]\((.*?\.(mp4|mov|webm|avi))\)/gi;
 		let match;
 		while ((match = mdRegex.exec(text)) !== null) urls.push(match[1]);
@@ -359,13 +334,13 @@ document.addEventListener('DOMContentLoaded', function () {
 			if (!urls.includes(match[0])) urls.push(match[0]);
 		}
 
-		// ★ 4) vimeo.com/12345 (공유 URL, 마크다운 링크) — 새로 추가!
+		// ★ 4) vimeo.com/12345
 		const vimeoShareMdRegex = /\[.*?\]\((https?:\/\/vimeo\.com\/\d+[^\s)]*)\)/gi;
 		while ((match = vimeoShareMdRegex.exec(text)) !== null) {
 			if (!urls.includes(match[1])) urls.push(match[1]);
 		}
 
-		// ★ 5) vimeo.com/12345 (bare URL) — 새로 추가!
+		// ★ 5) vimeo.com/12345 (bare URL) 
 		const vimeoShareBareRegex = /(https?:\/\/vimeo\.com\/\d+[^\s)]*)/gi;
 		while ((match = vimeoShareBareRegex.exec(text)) !== null) {
 			if (!urls.includes(match[0])) urls.push(match[0]);
@@ -391,8 +366,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	function extractFileUrls(text) {
 		const urls = [];
 
-		// 1) 📎 접두사가 붙은 마크다운 링크 (instruction #15 형식)
-		// [📎 Title](URL) 패턴
+		// [📎 Title](URL) 
 		const emojiMdRegex = /\[📎\s*([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gi;
 		let match;
 		while ((match = emojiMdRegex.exec(text)) !== null) {
@@ -401,7 +375,6 @@ document.addEventListener('DOMContentLoaded', function () {
 			}
 		}
 
-		// 2) 📎 prefix 없이도 Google Workspace URL이면 file로 처리
 		const gwsRegex = /\[([^\]]+)\]\((https?:\/\/(?:docs|drive|sheets|slides)\.google\.com\/[^\s)]+)\)/gi;
 		while ((match = gwsRegex.exec(text)) !== null) {
 			if (!urls.find(u => u.url === match[2])) {
@@ -417,7 +390,7 @@ document.addEventListener('DOMContentLoaded', function () {
 			}
 		}
 
-		// 4) 기존 .pdf 패턴 유지
+		// 4) .pdf 
 		const pdfMdRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]*\.pdf[^\s)]*)\)/gi;
 		while ((match = pdfMdRegex.exec(text)) !== null) {
 			if (!urls.find(u => u.url === match[2])) {
@@ -443,7 +416,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	// ================================================
-	// 미디어 패널 (기존 코드 유지)
+	// Media Panel 
 	// ================================================
 
 	function openMediaPanel(mediaItems, infoText, itemDataList) {
@@ -591,7 +564,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	// ================================================
-	// 마크다운 변환 (기존 코드 유지)
+	//  Changing Markdown
 	// ================================================
 
 	function formatMarkdown(text) {
@@ -620,7 +593,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	// ================================================
-	// 메시지 추가 (기존 코드 유지)
+	//  Adding Message
 	// ================================================
 
 	function addMessage(text, sender) {
@@ -700,7 +673,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	// ================================================
-	// 메시지 전송 (기존 코드 유지)
+	//  Sending Message
 	// ================================================
 
 	async function sendMessageToBackend() {
@@ -816,7 +789,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	}
 
 	// ================================================
-	// 웰컴 메시지 (기존 코드 유지)
+	//  Welcome Message
 	// ================================================
 
 	function showWelcomeMessage() {
@@ -848,7 +821,6 @@ document.addEventListener('DOMContentLoaded', function () {
 	setTimeout(showWelcomeMessage, 1000);
 });
 
-// 전역 함수
 function closeMediaPanel() {
 	const panel = document.getElementById('mediaSlidePanel');
 	if (panel) {
